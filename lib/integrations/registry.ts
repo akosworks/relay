@@ -1,12 +1,9 @@
 import { githubConnector } from "./connectors/github";
 import { gmailConnector } from "./connectors/gmail";
 import { googleDocsConnector, googleDriveConnector } from "./connectors/google";
-import { jiraConnector } from "./connectors/jira";
-import { linearConnector } from "./connectors/linear";
 import { notionConnector } from "./connectors/notion";
 import { slackConnector } from "./connectors/slack";
-import { transcriptsConnector } from "./connectors/transcripts";
-import type { Connector } from "./types";
+import type { Connector, PlannedIntegration } from "./types";
 
 /**
  * The registry is the only place that knows which connectors exist.
@@ -16,14 +13,27 @@ import type { Connector } from "./types";
  */
 const CONNECTORS: Connector[] = [
   slackConnector,
-  transcriptsConnector,
-  notionConnector,
-  githubConnector,
   gmailConnector,
-  jiraConnector,
-  linearConnector,
+  notionConnector,
   googleDocsConnector,
   googleDriveConnector,
+  githubConnector,
+];
+
+/**
+ * Sources that are built but not shipped. Listed separately from the registry
+ * rather than as a connector with a disabled flag, so nothing downstream can
+ * accidentally try to sync one: the routes resolve ids through `getConnector`,
+ * which never returns these.
+ */
+const PLANNED: PlannedIntegration[] = [
+  {
+    id: "microsoft-teams",
+    name: "Microsoft Teams",
+    blurb: "Channels, chats and meeting recaps from across the tenant.",
+    category: "communication",
+    teaches: ["person", "meeting", "decision", "project"],
+  },
 ];
 
 const BY_ID = new Map(CONNECTORS.map((c) => [c.id, c]));
@@ -32,10 +42,14 @@ export function listConnectors(): Connector[] {
   return CONNECTORS;
 }
 
+export function listPlanned(): PlannedIntegration[] {
+  return PLANNED;
+}
+
 export function getConnector(id: string): Connector | null {
   return BY_ID.get(id) ?? null;
 }
 
-export function defaultConnectedIds(): string[] {
-  return CONNECTORS.filter((c) => c.defaultConnected).map((c) => c.id);
+export function connectorName(id: string): string {
+  return BY_ID.get(id)?.name ?? id;
 }

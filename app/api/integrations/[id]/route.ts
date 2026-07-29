@@ -3,7 +3,6 @@ import {
   disconnectIntegration,
   syncIntegration,
 } from "@/lib/ingestion/pipeline";
-import { ensureBootstrapped } from "@/lib/ingestion/bootstrap";
 import { getConnector } from "@/lib/integrations/registry";
 import { integrationSummary } from "@/lib/integrations/state";
 
@@ -15,7 +14,6 @@ type Action = "connect" | "disconnect" | "sync";
  * here without touching ingestion.
  */
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  await ensureBootstrapped();
   const { id } = await context.params;
 
   if (!getConnector(id)) {

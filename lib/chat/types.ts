@@ -50,6 +50,12 @@ export interface ChatAnswer {
   edges: GraphEdgeView[];
   /** Mean confidence of the memories the answer rests on. */
   confidence: number;
+  /**
+   * Whether memory actually carried this answer. False means the blocks say so
+   * in plain words and hold nothing else — the UI renders that differently
+   * because an admission is not an answer.
+   */
+  grounded: boolean;
   followUps: string[];
   answeredAt: string;
 }

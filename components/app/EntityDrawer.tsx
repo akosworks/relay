@@ -79,7 +79,7 @@ export function EntityDrawer({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.4, ease: EASE.soft }}
-            className="fixed inset-0 z-50 cursor-default bg-ink/[0.12]"
+            className="fixed inset-0 z-[60] cursor-default bg-ink/[0.12]"
           />
 
           <motion.aside
@@ -88,7 +88,7 @@ export function EntityDrawer({
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ duration: 0.62, ease: EASE.out }}
-            className="fixed inset-y-0 right-0 z-50 flex w-full max-w-[440px] flex-col bg-paper shadow-[-1px_0_0_0_var(--color-rule)]"
+            className="fixed inset-y-0 right-0 z-[60] flex w-full max-w-[440px] flex-col bg-paper shadow-[-1px_0_0_0_var(--color-rule)]"
           >
             <header className="flex items-center justify-between px-7 pb-4 pt-6">
               <span className="text-[11px] uppercase tracking-[0.09em] text-ink-45">

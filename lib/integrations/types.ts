@@ -14,8 +14,6 @@ export type ConnectorCategory =
   | "code"
   | "documents"
   | "email"
-  | "tickets"
-  | "meetings"
   | "storage";
 
 /** What a connector produces: a raw event minus the fields ingestion assigns. */
@@ -36,9 +34,20 @@ export interface Connector {
   sourceTypes: SourceType[];
   /** The kinds of memory this source tends to produce. Shown to the user. */
   teaches: EntityType[];
-  /** Connected out of the box, so a first-run visitor has something to ask about. */
-  defaultConnected?: boolean;
   fetch(options?: FetchOptions): Promise<ConnectorEvent[]>;
+}
+
+/**
+ * A source that is on the roadmap. It has everything a connector has except
+ * the one thing that matters — a way to fetch — so it is kept out of the
+ * registry and can only ever be rendered, never synced.
+ */
+export interface PlannedIntegration {
+  id: string;
+  name: string;
+  blurb: string;
+  category: ConnectorCategory;
+  teaches: EntityType[];
 }
 
 export type IntegrationStatus = "connected" | "disconnected" | "syncing";

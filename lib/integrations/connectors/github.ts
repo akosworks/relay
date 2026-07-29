@@ -90,7 +90,6 @@ export const githubConnector: Connector = {
   category: "code",
   sourceTypes: ["github.pull_request", "github.issue"],
   teaches: ["feature", "issue", "person", "project", "task"],
-  defaultConnected: true,
   async fetch({ since, limit } = {}) {
     const prs: ConnectorEvent[] = PULL_REQUESTS.map((pr) => ({
       sourceType: "github.pull_request",

@@ -10,6 +10,15 @@
   --color-blue: #1b45c9;
 
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+
+  /* Two shadows, one resting and one raised, so a card lifting under the cursor
+     is the same object moving rather than a different card. Both are almost
+     entirely spread and offset with barely any alpha: on white, a shadow you can
+     see the edge of reads as a border someone got wrong. */
+  --shadow-soft: 0 1px 2px rgba(11, 11, 12, 0.03), 0 10px 30px -14px rgba(11, 11, 12, 0.08);
+  --shadow-lift: 0 1px 2px rgba(11, 11, 12, 0.04), 0 20px 46px -18px rgba(11, 11, 12, 0.13);
+
+  --radius-card: 24px;
 }
 
 :root {
@@ -50,6 +59,201 @@ body {
   outline: 2px solid var(--color-blue);
   outline-offset: 4px;
   border-radius: 2px;
+}
+
+/* ------------------------------------------------------------------ backdrop
+
+   The application background. The marketing page sits on a ruled grid because
+   it is a document; the workspace sits on light because it is a room. Two very
+   large fields of colour drift on long, coprime cycles so they never fall into
+   step, and a matte grain keeps the white from reading as a blank canvas.
+
+   Everything is a compositor-only transform on an element that paints once, so
+   the whole thing costs nothing per frame no matter which page is open. */
+
+.backdrop-field {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+}
+
+.backdrop-field-a {
+  top: -34vh;
+  left: -18vw;
+  width: 92vw;
+  height: 92vw;
+  max-width: 1180px;
+  max-height: 1180px;
+  background: radial-gradient(
+    circle at center,
+    color-mix(in oklab, var(--color-blue) 6%, transparent) 0%,
+    transparent 66%
+  );
+  animation: backdrop-drift-a 53s ease-in-out infinite;
+}
+
+.backdrop-field-b {
+  right: -26vw;
+  bottom: -40vh;
+  width: 86vw;
+  height: 86vw;
+  max-width: 1040px;
+  max-height: 1040px;
+  background: radial-gradient(
+    circle at center,
+    color-mix(in oklab, var(--color-ink) 4.5%, transparent) 0%,
+    transparent 68%
+  );
+  animation: backdrop-drift-b 71s ease-in-out infinite;
+}
+
+/* A third field, crossing the other two on a different cycle. Three is where
+   the movement stops reading as one shape going back and forth. */
+.backdrop-field-c {
+  top: 18vh;
+  right: 4vw;
+  width: 54vw;
+  height: 54vw;
+  max-width: 720px;
+  max-height: 720px;
+  background: radial-gradient(
+    circle at center,
+    color-mix(in oklab, var(--color-blue) 4%, transparent) 0%,
+    transparent 70%
+  );
+  animation: backdrop-drift-c 89s ease-in-out infinite;
+}
+
+/*
+  Two motes, drifting.
+  Not particles — there are two of them, they are three pixels across, and they
+  take a minute and a half to cross the screen. The point is that something in
+  the room is alive, not that the user notices anything moving.
+*/
+.backdrop-mote {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--color-blue) 26%, transparent);
+  will-change: transform, opacity;
+}
+
+.backdrop-mote-a {
+  top: 62vh;
+  left: 18vw;
+  animation: backdrop-float-a 94s linear infinite;
+}
+
+.backdrop-mote-b {
+  top: 28vh;
+  left: 71vw;
+  animation: backdrop-float-b 127s linear infinite;
+}
+
+.backdrop-grain {
+  position: absolute;
+  inset: -50%;
+  opacity: 0.4;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.055'/%3E%3C/svg%3E");
+}
+
+@keyframes backdrop-drift-a {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(5vw, 4vh, 0) scale(1.08);
+  }
+}
+
+@keyframes backdrop-drift-b {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1.04);
+  }
+  50% {
+    transform: translate3d(-6vw, -5vh, 0) scale(1);
+  }
+}
+
+@keyframes backdrop-drift-c {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(-7vw, 6vh, 0) scale(1.12);
+  }
+  66% {
+    transform: translate3d(3vw, -4vh, 0) scale(0.96);
+  }
+}
+
+/* Fading in and out at the ends so a mote never appears or vanishes mid-air. */
+@keyframes backdrop-float-a {
+  0% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0;
+  }
+  12%,
+  88% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(34vw, -46vh, 0);
+    opacity: 0;
+  }
+}
+
+@keyframes backdrop-float-b {
+  0% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0;
+  }
+  14%,
+  86% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(-26vw, 38vh, 0);
+    opacity: 0;
+  }
+}
+
+/* Waiting, at the shape of the thing being waited for. A sheen crossing a rule
+   the width of the text that is coming reads as loading; a spinner in the middle
+   of an empty panel reads as broken. */
+.shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-rule) 0%,
+    color-mix(in oklab, var(--color-rule) 40%, white) 50%,
+    var(--color-rule) 100%
+  );
+  background-size: 220% 100%;
+  animation: shimmer 1.7s linear infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 160% 0;
+  }
+  to {
+    background-position: -60% 0;
+  }
+}
+
+/* Hide the scrollbar on rails that scroll sideways by design (the app nav on a
+   narrow screen). The overflow is real; only its furniture is suppressed. */
+.rail {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.rail::-webkit-scrollbar {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

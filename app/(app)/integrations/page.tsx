@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Integrations } from "@/components/app/Integrations";
 
 export const metadata: Metadata = {
-  title: "Sources",
+  title: "Integrations",
   description: "Connect the tools your company already uses and Relay learns from them.",
 };
 

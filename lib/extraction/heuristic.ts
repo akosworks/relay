@@ -7,6 +7,7 @@ import type {
   RawEvent,
   RelationType,
 } from "@/lib/memory/types";
+import { dateBoundTo } from "@/lib/memory/dates";
 import { excerptOf, findDates, rationale, sentences, signature, toTitle } from "./text";
 import type { KnownEntity, MentionResolver } from "./resolver";
 import type { ExtractionContext, Extractor } from "./types";
@@ -15,10 +16,10 @@ import type { ExtractionContext, Extractor } from "./types";
  * The extraction layer, done with rules rather than a model.
  *
  * It reads a raw event the way a person skimming for the important part does:
- * structured fields first (a Jira assignee is a fact, not a guess), then the
- * prose, looking for the handful of sentence shapes that carry organizational
- * meaning — someone decided something, someone owns something, something is
- * blocked on something else.
+ * structured fields first (a pull request's author is a fact, not a guess),
+ * then the prose, looking for the handful of sentence shapes that carry
+ * organizational meaning — someone decided something, someone owns something,
+ * something is blocked on something else.
  *
  * Everything it emits is JSON with a confidence and the span of text it came
  * from. A model-backed extractor would replace the internals of this file and
@@ -166,14 +167,45 @@ function resolveTarget(
   });
 }
 
-const DECISION_CUES: { re: RegExp; confidence: number }[] = [
+/** The kinds of gathering companies name. Not an ontology — just what gets said. */
+const MEETING_NOUN =
+  "meeting|review|kickoff|kick-off|standup|stand-up|retro|retrospective|all-hands|sync|demo";
+
+/**
+ * Words allowed in front of one while still lowercase. A capitalised word
+ * qualifies on its own, because it is either a proper noun or the start of a
+ * sentence someone chose to begin with the meeting's name.
+ */
+const MEETING_MODIFIER =
+  "architecture|launch|planning|design|sprint|security|quarterly|weekly|monthly|daily|board|" +
+  "project|team|company|customer|onboarding|incident|postmortem|roadmap|budget|hiring|status|" +
+  "kickoff|technical|product|engineering";
+
+const MEETING = new RegExp(
+  `\\b((?:(?:[A-Z][A-Za-z]+|${MEETING_MODIFIER})\\s+){1,3}(?:${MEETING_NOUN}))\\b`,
+  "g",
+);
+
+/** Capitalised because a sentence started, not because it is a name. */
+const MEETING_STOPWORD = /^(?:their|our|his|her|its|my|your|the|a|an|this|that|these|those)\b/i;
+
+/**
+ * The sentence shapes a decision gets announced in.
+ *
+ * `negative` matters more than it looks. "We are not moving to DynamoDB" is a
+ * decision, and the clause after the cue is "moving to DynamoDB" — store that as
+ * the title and memory now asserts the exact opposite of what was said, with a
+ * citation to the sentence that disproves it. The negation has to survive into
+ * the title or the rule is worse than not having it.
+ */
+const DECISION_CUES: { re: RegExp; confidence: number; negative?: true }[] = [
   { re: /\bwe(?:'ve| have| had)?\s+decided\s+(?:to\s+|that\s+)?/i, confidence: 0.86 },
   { re: /\bwe(?:'ve| have)?\s+agreed\s+(?:to\s+|that\s+)?/i, confidence: 0.82 },
   { re: /\bwe(?:'ve| have)?\s+chosen\s+(?:to\s+)?/i, confidence: 0.82 },
   { re: /\bthe decision (?:is|was)\s+(?:to\s+)?/i, confidence: 0.84 },
   { re: /\bdecision:\s*/i, confidence: 0.84 },
   { re: /\bwe are going with\s+/i, confidence: 0.78 },
-  { re: /\bwe will not\b|\bwe are not\b/i, confidence: 0.6 },
+  { re: /\bwe (?:will|are|do) not\s+(?:be\s+)?/i, confidence: 0.6, negative: true },
 ];
 
 // ------------------------------------------------------------- structural
@@ -196,31 +228,6 @@ function structural(event: RawEvent, c: Collector): KnownEntity | null {
         attributes: { role: str("role") ?? null, team: str("team") ?? null, handle: str("handle") ?? null },
         aliases: str("handle") ? [str("handle")!, str("handle")!.replace("@", "")] : [],
       });
-    }
-
-    case "transcript.meeting": {
-      const meetingTitle = str("meeting") ?? event.title;
-      const attendees = Array.isArray(meta.attendees) ? (meta.attendees as string[]) : [];
-      const meeting = c.entity({
-        type: "meeting",
-        title: meetingTitle,
-        summary: `Meeting on ${event.occurredAt.slice(0, 10)}${
-          attendees.length ? ` with ${attendees.join(", ")}` : ""
-        }.`,
-        confidence: 0.95,
-        excerpt: event.body,
-        attributes: { attendees, date: event.occurredAt.slice(0, 10) },
-      });
-      for (const person of attendees) {
-        const p = personFrom(person, c, 0.85, event.body);
-        c.link("participated_in", p, meeting, {
-          confidence: 0.9,
-          excerpt: event.body,
-          note: "listed as an attendee",
-        });
-      }
-      // A turn's focal entity is the meeting it was said in.
-      return meeting;
     }
 
     case "github.pull_request": {
@@ -265,32 +272,6 @@ function structural(event: RawEvent, c: Collector): KnownEntity | null {
       });
       personFrom(event.author, c, 0.85, event.body);
       return issue;
-    }
-
-    case "jira.issue":
-    case "linear.issue": {
-      const ticket = str("key") ?? str("identifier") ?? event.externalId;
-      const status = str("status") ?? str("state") ?? null;
-      const assignee = str("assignee");
-      const task = c.entity({
-        type: "task",
-        title: event.title,
-        // The ticket id is a stronger identity than the summary text.
-        keyHint: ticket.toLowerCase(),
-        summary: event.body.split(/(?<=\.)\s/)[0] ?? event.title,
-        confidence: 0.92,
-        excerpt: event.body,
-        attributes: { ticket, status, assignee: assignee ?? null },
-        tags: status === "Blocked" ? ["blocked"] : [],
-        aliases: [ticket.toLowerCase()],
-      });
-      const person = personFrom(assignee, c, 0.9, event.body);
-      c.link("assigned_to", task, person, {
-        confidence: 0.92,
-        excerpt: event.body,
-        note: `assigned in ${event.sourceType === "jira.issue" ? "Jira" : "Linear"}`,
-      });
-      return task;
     }
 
     case "notion.page":
@@ -410,6 +391,39 @@ function prose(event: RawEvent, c: Collector, ctx: ExtractionContext, focal: Kno
       });
     }
 
+    // -- meetings ----------------------------------------------------------
+    // Nobody connects a calendar to Relay; they talk about the calendar, so a
+    // meeting enters memory as soon as someone names one. `MEETING` is
+    // deliberately narrow: it wants a name, which means the words before the
+    // noun have to be either capitalised or one of the handful of words
+    // companies actually put in front of "review". "Runs a kickoff call" names
+    // nothing, and a calendar full of phrases like that is worse than an empty one.
+    for (const m of sentence.matchAll(MEETING)) {
+      const phrase = cleanPhrase(m[1]);
+      if (MEETING_STOPWORD.test(phrase)) continue;
+
+      // Only a date the sentence ties to this meeting. Failing that, the day it
+      // was talked about — which is at least a day it certainly came up.
+      const tail = sentence.slice((m.index ?? 0) + m[1].length);
+      const date = dateBoundTo(tail, event.occurredAt) ?? event.occurredAt.slice(0, 10);
+      const title = phrase.charAt(0).toUpperCase() + phrase.slice(1);
+
+      c.entity({
+        type: "meeting",
+        title,
+        // "Vantage Health security review" and "our security review" are one
+        // meeting described twice; key both on the trailing phrase, the way
+        // procedures already are.
+        keyHint: phrase.match(/([\w-]+\s+[\w-]+)$/)?.[1].toLowerCase(),
+        summary: `${title} on ${date}.`,
+        // Inferred from prose, so never as sure as a structured field would be.
+        confidence: 0.7,
+        excerpt: sentence,
+        occurredAt: `${date}T09:00:00Z`,
+        attributes: { date, mentionedIn: event.title },
+      });
+    }
+
     for (const m of sentence.matchAll(
       /\b((?:[a-z]+\s+)?[a-z]+\s+(?:process|runbook|procedure|workflow))\b/gi,
     )) {
@@ -432,12 +446,16 @@ function prose(event: RawEvent, c: Collector, ctx: ExtractionContext, focal: Kno
       if (!hit || hit.index === undefined) continue;
 
       const clause = sentence.slice(hit.index + hit[0].length);
-      const title = toTitle(clause);
-      if (title.length < 8) continue;
+      const stated = toTitle(clause);
+      if (stated.length < 8) continue;
+      const title = cue.negative
+        ? `Not ${stated.charAt(0).toLowerCase()}${stated.slice(1)}`
+        : stated;
 
       const why = rationale(sentence);
       const dates = findDates(sentence);
-      const isMeeting = event.sourceType === "transcript.meeting";
+      // A decision record is a more deliberate statement than a chat message.
+      const isRecord = event.sourceType === "notion.page" || event.sourceType === "gdocs.document";
 
       const decision = c.entity({
         type: "decision",
@@ -445,7 +463,7 @@ function prose(event: RawEvent, c: Collector, ctx: ExtractionContext, focal: Kno
         // Two reports of one decision rarely use the same words.
         keyHint: signature(clause),
         summary: title,
-        confidence: cue.confidence + (isMeeting || event.sourceType === "notion.page" ? 0.04 : 0),
+        confidence: cue.confidence + (isRecord ? 0.04 : 0),
         excerpt: sentence,
         attributes: {
           rationale: why,
@@ -459,20 +477,23 @@ function prose(event: RawEvent, c: Collector, ctx: ExtractionContext, focal: Kno
 
       const decider = personFrom(event.author, c, 0.85, sentence);
       c.link("decided_by", decision, decider, {
-        confidence: isMeeting ? 0.9 : 0.8,
+        confidence: isRecord ? 0.85 : 0.8,
         excerpt: sentence,
-        note: isMeeting ? "said it in the meeting" : "wrote it",
+        note: isRecord ? "recorded as the author" : "wrote it",
       });
 
-      if (focal?.type === "meeting") {
-        c.link("created_from", decision, focal, {
-          confidence: 0.9,
+      // "Recap of the architecture review: we decided…" — the meeting is named
+      // in the same breath as the decision, so the decision came out of it.
+      const inMeeting = resolver.resolve(sentence).find((e) => e.type === "meeting");
+      if (inMeeting) {
+        c.link("created_from", decision, inMeeting, {
+          confidence: 0.82,
           excerpt: sentence,
           note: "decided in this meeting",
         });
         for (const attendee of resolver.resolve((event.participants ?? []).join(" "), ["person"])) {
-          c.link("participated_in", attendee, focal, {
-            confidence: 0.85,
+          c.link("participated_in", attendee, inMeeting, {
+            confidence: 0.8,
             excerpt: sentence,
           });
         }

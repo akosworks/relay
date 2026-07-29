@@ -53,10 +53,7 @@ export type SourceType =
   | "notion.page"
   | "gdocs.document"
   | "gdrive.file"
-  | "gmail.thread"
-  | "jira.issue"
-  | "linear.issue"
-  | "transcript.meeting";
+  | "gmail.thread";
 
 /** A raw record exactly as the connector handed it over. Never mutated. */
 export interface RawEvent {

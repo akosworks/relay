@@ -5,51 +5,65 @@ import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
 import { Logo } from "@/components/Logo";
 import { EASE } from "@/lib/motion";
+import { AppBackdrop } from "./AppBackdrop";
+import { useAsk } from "./Ask";
 
 /**
- * The frame the memory lives in.
+ * The frame the workspace lives in.
  *
- * Fixed, hairline-ruled, and the same height wherever you are — the marketing
- * header contracts on scroll because the page is a performance; here the
- * conversation is the performance and the frame should hold still.
+ * Fixed, hairline-ruled, and exactly the same height wherever you are. The
+ * marketing header contracts on scroll because that page is a performance; here
+ * you are working, and a frame that moves while you read is a frame you notice.
+ *
+ * Three destinations, because asking is not one. Ask lives in the button on the
+ * right, which opens over whatever you are looking at rather than taking you
+ * somewhere — the one interaction that should never cost you your place.
  */
 const LINKS = [
-  { href: "/chat", label: "Ask" },
-  { href: "/integrations", label: "Sources" },
+  { href: "/home", label: "Home" },
+  { href: "/calendar", label: "Calendar" },
+  { href: "/tasks", label: "Tasks" },
+  { href: "/integrations", label: "Integrations" },
 ];
 
-export function AppShell({
-  children,
-  aside,
-}: {
-  children: React.ReactNode;
-  aside?: React.ReactNode;
-}) {
+export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { openAsk } = useAsk();
 
   return (
-    <div className="min-h-[100svh]">
+    <div className="relative min-h-[100svh]">
+      <AppBackdrop />
+
       <motion.header
-        initial={{ y: -12, opacity: 0 }}
+        initial={{ y: -10, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.9, ease: EASE.out }}
-        className="fixed inset-x-0 top-0 z-40 h-[64px] bg-paper/85 backdrop-blur-md"
+        className="fixed inset-x-0 top-0 z-40 h-[64px] bg-paper/72 backdrop-blur-xl"
       >
         <div className="absolute inset-x-0 bottom-0 h-px bg-rule" />
-        <nav className="mx-auto flex h-full max-w-[1240px] items-center gap-8 px-6 sm:px-10">
-          <Link href="/" className="flex items-center gap-2.5 text-ink" aria-label="Relay, home">
+        <nav className="mx-auto flex h-full max-w-[1180px] items-center gap-6 px-6 sm:gap-9 sm:px-10">
+          <Link
+            href="/home"
+            className="flex shrink-0 items-center gap-2.5 text-ink"
+            aria-label="Relay, home"
+          >
             <Logo size={22} />
-            <span className="text-[16px] font-medium tracking-[-0.025em]">Relay</span>
+            {/* The wordmark is the first thing to go when space is tight; the
+                mark alone still says where you are. */}
+            <span className="hidden text-[16px] font-medium tracking-[-0.025em] sm:block">
+              Relay
+            </span>
           </Link>
 
-          <div className="flex items-center gap-6">
+          <div className="rail flex items-center gap-6 overflow-x-auto">
             {LINKS.map((link) => {
               const active = pathname === link.href;
               return (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`relative py-1 text-[14px] tracking-[-0.012em] transition-colors duration-400 ${
+                  aria-current={active ? "page" : undefined}
+                  className={`relative shrink-0 py-1 text-[14px] tracking-[-0.012em] transition-colors duration-400 ${
                     active ? "text-ink" : "text-ink-45 hover:text-ink"
                   }`}
                 >
@@ -65,17 +79,25 @@ export function AppShell({
               );
             })}
           </div>
+
+          <button
+            type="button"
+            onClick={() => openAsk()}
+            className="group ml-auto flex shrink-0 items-center gap-2.5 rounded-full border border-rule py-[7px] pl-4 pr-[7px] transition-colors duration-400 hover:border-ink-25"
+          >
+            <span className="text-[13.5px] tracking-[-0.012em] text-ink-45 transition-colors duration-400 group-hover:text-ink">
+              Ask Relay
+            </span>
+            <kbd className="rounded-[7px] bg-ink/[0.045] px-[7px] py-[3px] font-sans text-[11px] tracking-[0.02em] text-ink-45">
+              ⌘K
+            </kbd>
+          </button>
         </nav>
       </motion.header>
 
-      <div className="mx-auto flex max-w-[1240px] gap-10 px-6 pt-[64px] sm:px-10">
-        <main className="min-w-0 flex-1">{children}</main>
-        {aside ? (
-          <aside className="hidden w-[276px] shrink-0 py-10 xl:block">
-            <div className="sticky top-[104px]">{aside}</div>
-          </aside>
-        ) : null}
-      </div>
+      <main className="relative z-10 mx-auto w-full max-w-[1180px] px-6 pt-[64px] sm:px-10">
+        {children}
+      </main>
     </div>
   );
 }

@@ -1,8 +1,6 @@
-import { ensureBootstrapped } from "@/lib/ingestion/bootstrap";
 import { getMemoryOverview } from "@/lib/memory/overview";
 
-/** What memory currently holds, for the context panel beside the conversation. */
+/** What memory currently holds. Read by the dashboard and by the Ask page. */
 export async function GET() {
-  await ensureBootstrapped();
   return Response.json(await getMemoryOverview());
 }

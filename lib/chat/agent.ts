@@ -474,18 +474,43 @@ export async function ask(question: string, history: ChatTurn[] = []): Promise<C
     ? used.reduce((sum, m) => sum + m.confidence, 0) / used.length
     : 0;
 
-  if (blocks.length === 0) {
+  /**
+   * The one thing the agent must never do is answer anyway.
+   *
+   * Blocks with no citation behind them are not an answer, and neither is a
+   * claim resting entirely on memories the extractor was unsure of. Both cases
+   * are treated the same way: throw the draft away and say what is missing.
+   * A user who is told the knowledge is not there can go and connect it; a user
+   * who is given a confident guess cannot tell that anything is wrong.
+   */
+  const grounded = citations.length > 0 && confidence >= 0.6;
+
+  if (!grounded) {
     const connected = listIntegrationSummaries().filter((i) => i.status === "connected");
-    blocks.push({
-      kind: "paragraph",
-      text:
-        connected.length === 0
-          ? "Nothing is connected yet, so I have no memory to answer from. Connect a source on the Integrations page and I will start learning."
-          : `I have nothing in memory about that. I currently learn from ${connected
-              .map((i) => i.name)
-              .join(", ")} — connecting more sources would widen what I can answer.`,
+    return {
+      question,
+      intent: retrieval.intent.kind,
+      blocks: [
+        { kind: "paragraph", text: "I don't have enough information about this yet.", citations: [] },
+        {
+          kind: "paragraph",
+          text:
+            connected.length === 0
+              ? "Nothing is connected yet, so there is no company knowledge for me to read. Connect your company tools or upload additional information so I can answer this accurately."
+              : `I currently learn from ${connected
+                  .map((i) => i.name)
+                  .join(", ")}. Connect more company tools or upload additional information so I can answer this accurately.`,
+          citations: [],
+        },
+      ],
       citations: [],
-    });
+      memories: [],
+      edges: [],
+      confidence: 0,
+      grounded: false,
+      followUps: [],
+      answeredAt: new Date().toISOString(),
+    };
   }
 
   return {
@@ -501,6 +526,7 @@ export async function ask(question: string, history: ChatTurn[] = []): Promise<C
       note: e.note,
     })),
     confidence,
+    grounded: true,
     followUps: followUps(question, used),
     answeredAt: new Date().toISOString(),
   };

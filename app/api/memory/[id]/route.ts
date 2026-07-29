@@ -1,4 +1,3 @@
-import { ensureBootstrapped } from "@/lib/ingestion/bootstrap";
 import { getConnector } from "@/lib/integrations/registry";
 import type { EntityDetail, TimelineItem } from "@/lib/memory/types";
 import { expand } from "@/lib/retrieval";
@@ -8,7 +7,6 @@ import { expand } from "@/lib/retrieval";
  * answer inspectable: every claim can be opened and walked outwards.
  */
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
-  await ensureBootstrapped();
   const { id } = await context.params;
 
   const result = await expand(id);

@@ -66,7 +66,6 @@ export const notionConnector: Connector = {
   category: "documents",
   sourceTypes: ["notion.page"],
   teaches: ["procedure", "decision", "project", "document", "feature"],
-  defaultConnected: true,
   async fetch({ since, limit } = {}) {
     const events: ConnectorEvent[] = PAGES.map((p): ConnectorEvent => ({
       sourceType: "notion.page",

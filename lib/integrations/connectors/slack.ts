@@ -197,7 +197,6 @@ export const slackConnector: Connector = {
   category: "communication",
   sourceTypes: ["slack.message", "slack.member"],
   teaches: ["person", "decision", "project", "issue", "customer"],
-  defaultConnected: true,
   async fetch({ since, limit } = {}) {
     const events = [...MEMBERS.map(memberEvent), ...MESSAGES.map(messageEvent)]
       .filter((e) => (since ? e.occurredAt > since : true))

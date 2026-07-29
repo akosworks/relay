@@ -1,10 +1,13 @@
-import { defaultConnectedIds, getConnector, listConnectors } from "./registry";
+import { getConnector, listConnectors } from "./registry";
 import type { IntegrationState, IntegrationSummary } from "./types";
 
 /**
  * Connection state lives apart from the connectors themselves so a connector
  * stays a pure fetcher. In production this table is a row per workspace and per
  * integration; here it is a map with the same shape.
+ *
+ * Nothing is connected out of the box. An empty memory is the honest starting
+ * point for a product whose promise is that it only knows what it was told.
  */
 const CACHE_KEY = Symbol.for("relay.integrations");
 
@@ -14,12 +17,11 @@ function table(): Map<string, IntegrationState> {
   const g = globalThis as Global;
   if (!g[CACHE_KEY]) {
     const map = new Map<string, IntegrationState>();
-    const connected = new Set(defaultConnectedIds());
     for (const c of listConnectors()) {
       map.set(c.id, {
         id: c.id,
-        status: connected.has(c.id) ? "connected" : "disconnected",
-        connectedAt: connected.has(c.id) ? new Date().toISOString() : null,
+        status: "disconnected",
+        connectedAt: null,
         lastSyncAt: null,
         events: 0,
         memories: 0,
