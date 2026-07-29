@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx --yes create-next-app@latest relay --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" --use-npm --turbopack --yes)",
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(echo \"LINT_EXIT=$?\")",
+      "PowerShell(Get-CimInstance Win32_Process -Filter \"ProcessId = 31608\")",
+      "Bash(npx prettier *)",
+      "Bash(sed -i 's/import { AnimatePresence, motion } from \"motion\\\\/react\";/import { motion } from \"motion\\\\/react\";/' components/app/Chat.tsx)"
+    ]
+  }
+}
