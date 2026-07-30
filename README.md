@@ -93,11 +93,9 @@ After restarting the application, connect GitHub from the **Integrations** page 
 
 ---
 
-## Optional AI Extraction
+## AI Extraction
 
-Relay works out of the box using its built-in extraction engine.
-
-To enable LLM-powered extraction, configure either a Groq or OpenAI-compatible provider.
+Relay works out of the box using its built-in extraction engine, to enable LLM-powered extraction, configure either a Groq or OpenAI-compatible provider.
 
 ### Groq
 
@@ -118,8 +116,6 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 RELAY_LLM_PROVIDER=openai
 RELAY_EXTRACTOR=llm
 ```
-
-If no API key is configured, Relay automatically falls back to the built-in extraction engine.
 
 ---
 
