@@ -1,164 +1,179 @@
 # Relay
 
-An AI agent that becomes an organization's memory. It reads the tools a company
-already uses, turns what it finds into structured memory, and answers questions
-about the company with the evidence attached.
+Relay is an AI-powered organizational memory that connects to the tools a company already uses, transforms their data into structured knowledge, and answers questions with verifiable evidence. Rather than searching through documents, chats, and tickets independently, Relay builds a unified memory graph that enables users to retrieve organizational knowledge through natural language.
+
+---
+
+## Technology Stack
+
+* **Frontend:** Next.js, React, TypeScript
+* **Backend:** Next.js API Routes
+* **AI:** Rule-based extraction with optional LLM-powered extraction (Groq or OpenAI-compatible providers)
+* **Integrations:** GitHub, Slack, Notion, Gmail, Google Drive, Google Docs, Jira, Linear
+* **Deployment:** Compatible with modern Node.js hosting platforms such as Render and Vercel (persistent storage recommended for production deployments)
+
+---
+
+## Running Relay
+
+Install dependencies and start the development server:
 
 ```bash
+npm install
 npm run dev
 ```
 
-- `/` — the marketing site
-- `/chat` — the agent (the product)
-- `/integrations` — sources to connect
+The application will be available locally once the development server has started.
 
-Memory seeds itself on the first request: Slack, meeting transcripts, Notion and
-GitHub are connected out of the box, so there is something to ask about
-immediately. Connect Jira, Linear, Gmail, Google Docs or Drive to watch the
-memory grow.
+---
 
-### Configure LLM extraction
+## Demo Login
 
-If you want the extraction stage to use an LLM instead of the built-in rules,
-set these environment variables before starting the app.
+Use the following credentials to access the demo:
 
-For Groq:
+**Email**
 
-```bash
-export GROQ_API_KEY=your-groq-key
-export GROQ_MODEL=llama-3.3-70b-versatile
-export GROQ_BASE_URL=https://api.groq.com/openai/v1
-export RELAY_LLM_PROVIDER=groq
-export RELAY_EXTRACTOR=llm
+```
+fun@relay.com
 ```
 
-For OpenAI-compatible providers:
+**Password**
 
-```bash
-export OPENAI_API_KEY=your-key
-export OPENAI_MODEL=gpt-4.1-mini
-export OPENAI_BASE_URL=https://api.openai.com/v1
-export RELAY_LLM_PROVIDER=openai
-export RELAY_EXTRACTOR=llm
+```
+iloverelay
 ```
 
-If no API key is present, Relay automatically falls back to the deterministic
-rule-based extractor so the app still works locally.
+---
 
-Gmail and GitHub are already registered in the integrations list, so they will
-appear on the Integrations page once the app is running.
+## Pages
 
-### Connect a real GitHub account
+* **/** — Landing page
+* **/chat** — AI workspace
+* **/integrations** — Connect and manage data sources
 
-GitHub is the one connector that can read a live account. Paste a personal
-access token into `.env.local` — there is a marked block at the bottom of the
-file — and that is the whole setup:
+---
+
+## Current Integrations
+
+Relay currently supports the following integrations:
+
+* GitHub
+* Slack
+* Notion
+* Gmail
+* Google Drive
+* Google Docs
+* Jira
+* Linear
+
+At present:
+
+* **GitHub** supports live data through a Personal Access Token.
+* **All other integrations** currently use representative mock data to demonstrate the product experience.
+
+---
+
+## Connecting GitHub
+
+Create a GitHub Personal Access Token with read access to repositories, issues, pull requests, and contents.
+
+Add the following to `.env.local`:
 
 ```bash
 GITHUB_TOKEN=github_pat_...
 ```
 
-Relay then reads **every repository the token can see**, most recently pushed
-first, skipping archived ones. To narrow it to a few, set the optional list:
+Optionally limit synchronization to selected repositories:
 
 ```bash
-GITHUB_REPOS=acme/atlas,acme/meridian
+GITHUB_REPOS=owner/repository,owner/another-repository
 ```
 
-Create the token at <https://github.com/settings/tokens> with read access to
-**Issues**, **Pull requests** and **Contents**. A classic token needs the `repo`
-scope; a fine-grained token must have *All repositories* selected for the
-read-everything default to mean anything. Restart the dev server, then press
-**Connect** on the GitHub card.
+After restarting the application, connect GitHub from the **Integrations** page to begin importing repository data.
 
-A configured token wins over the mock switch below — a source reading real data
-never mixes fixtures into it. A repository that fails mid-sync (issues disabled,
-access revoked) costs that repository only; a rejected token stops the sync and
-says so.
+---
 
-Relay reads recent issues and pull requests per repository through the REST API,
-maps them to the same `ConnectorEvent` shape the fixtures use, and hands them to
-the same ingestion pipeline. Nothing downstream knows the difference.
+## Optional AI Extraction
 
-### Mock data on and off
+Relay works out of the box using its built-in extraction engine.
 
-Every other connector reads fixtures. The switch is a constant in
-[`lib/integrations/mode.ts`](lib/integrations/mode.ts):
+To enable LLM-powered extraction, configure either a Groq or OpenAI-compatible provider.
 
-```ts
-const MOCK_DATA = true;   // false = real sources only
+### Groq
+
+```bash
+GROQ_API_KEY=your-key
+GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_BASE_URL=https://api.groq.com/openai/v1
+RELAY_LLM_PROVIDER=groq
+RELAY_EXTRACTOR=llm
 ```
 
-`RELAY_MOCK_DATA=off` in `.env.local` overrides it without editing code. With
-mock data off, fixture-backed sources fetch nothing and contribute no memories;
-a connector configured with real credentials keeps working. The rule is applied
-in one place, `lib/integrations/source.ts`, so a new connector cannot forget it.
+### OpenAI-Compatible
 
-Changing the switch affects what future syncs read — it does not retroactively
-remove memories already learned. Restart the dev server (memory lives in
-process) or disconnect and reconnect the sources to rebuild from scratch.
-
-## What it does
-
-Ask "why was our launch delayed" and the agent does not search documents. It
-retrieves the **decision** memory, walks the graph to the meeting it was made
-in, the person who made it, and the ticket it was waiting on, then writes an
-answer where every sentence is numbered against the Slack message or transcript
-turn that supports it.
-
-If memory has nothing on a subject, it says so. That is enforced in retrieval,
-not in prompt wording: a memory the question never reached cannot become an
-answer.
-
-## Pipeline
-
-```
-Connector → raw event storage → extraction → memory (entities + relationships) → retrieval → agent
+```bash
+OPENAI_API_KEY=your-key
+OPENAI_MODEL=gpt-4.1-mini
+OPENAI_BASE_URL=https://api.openai.com/v1
+RELAY_LLM_PROVIDER=openai
+RELAY_EXTRACTOR=llm
 ```
 
-Each stage is a module with one job, behind an interface:
+If no API key is configured, Relay automatically falls back to the built-in extraction engine.
 
-| Module | Path | Responsibility |
-| --- | --- | --- |
-| Connectors | `lib/integrations/` | Vendor-shaped fetching. One file per source. |
-| Ingestion | `lib/ingestion/` | Store raw, extract, merge, report. Idempotent. |
-| Extraction | `lib/extraction/` | Raw text → structured JSON with confidence and citations. |
-| Memory | `lib/memory/` | Entity and relationship model, identity, merging. |
-| Storage | `lib/storage/` | `RawEventStore` and `MemoryStore` interfaces. |
-| Retrieval | `lib/retrieval/` | Intent, ranking, graph expansion, evidence assembly. |
-| Agent | `lib/chat/` | Answer composition. Cannot write an uncited sentence. |
+---
 
-Nothing above storage knows the store is in memory; nothing above extraction
-knows the extractor is rule-based; nothing in `components/` imports a service.
+## Example Questions
 
-## Extending it
+Relay is designed to answer questions about an organization's knowledge, decisions, projects, and engineering work.
 
-**A new source** — add `lib/integrations/connectors/<vendor>.ts` exporting a
-`Connector`, then add it to the array in `registry.ts`. Nothing else changes.
+Examples include:
 
-**A different extractor** — implement `Extractor` (in `lib/extraction/types.ts`)
-and register it in `lib/extraction/index.ts`. A model-backed extractor returns
-the same `ExtractionResult`, so ingestion, memory, retrieval and chat are
-untouched.
+* Why was our launch delayed?
+* What decisions were made during the planning meeting?
+* Which pull requests are still awaiting review?
+* What is the status of Project Atlas?
+* Who owns the authentication service?
+* What blockers are currently affecting the mobile team?
+* Summarize recent engineering activity.
+* What action items came out of last week's meeting?
+* Which repositories have the most open issues?
+* Explain why a particular decision was made.
 
-**Real storage** — implement `RawEventStore` and `MemoryStore` and return the
-new provider from `getStorage()`. Postgres for entities and edges, a vector
-index for retrieval's first signal, everything else the same.
+Every response is grounded in evidence retrieved from connected sources.
 
-## What this build fakes
+---
 
-- **Data.** Every connector except GitHub returns fixture records instead of
-  calling an API. They are shaped like the real payloads and mapped through the
-  same code a live connector would use. GitHub calls the real REST API when a
-  token is configured — see above.
-- **Extraction.** The extractor is deterministic rules over sentence shapes —
-  decision cues, ownership statements, dependency phrases — rather than a model
-  call, so the pipeline runs offline and repeatably.
-- **Auth.** One hard-coded demo account, `fun@relay.com` / `iloverelay`, checked
-  against a constant in `lib/auth.ts`. There is no user table and no hashing —
-  the credentials are printed on the login screen, because this is a demo. The
-  session is an `HttpOnly` cookie and the workspace routes are gated in
-  `proxy.ts`, so the lock is real even though the key is public.
+## How It Works
 
-Memory lives in process. Restarting the dev server re-learns everything from the
-connectors, which takes a few milliseconds.
+Relay continuously ingests information from connected sources, extracts structured knowledge, builds an organizational memory graph, and retrieves relevant evidence to answer user questions.
+
+```
+Connectors
+      ↓
+Raw Events
+      ↓
+Knowledge Extraction
+      ↓
+Organizational Memory
+      ↓
+Retrieval
+      ↓
+AI Responses with Evidence
+```
+
+---
+
+## Project Structure
+
+| Module              | Responsibility              |
+| ------------------- | --------------------------- |
+| `lib/integrations/` | External data connectors    |
+| `lib/ingestion/`    | Data ingestion pipeline     |
+| `lib/extraction/`   | Knowledge extraction        |
+| `lib/memory/`       | Organizational memory graph |
+| `lib/storage/`      | Storage abstraction         |
+| `lib/retrieval/`    | Evidence retrieval          |
+| `lib/chat/`         | AI response generation      |
+
+The architecture is modular, allowing connectors, storage providers, and extraction engines to be extended independently.
