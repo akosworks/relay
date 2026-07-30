@@ -1,6 +1,6 @@
-import { listIntegrationSummaries } from "@/lib/integrations/state";
-import type { Entity, RawEvent, Relationship } from "@/lib/memory/types";
-import { expand, retrieve, type RetrievalResult, type RetrievedMemory } from "@/lib/retrieval";
+import type { Entity, Relationship } from "@/lib/memory/types";
+import { analyzeIntent } from "@/lib/retrieval/intent";
+import { expand, retrieve, type RetrievedMemory } from "@/lib/retrieval";
 import { getStorage } from "@/lib/storage";
 import {
   attr,
@@ -11,7 +11,11 @@ import {
   humanDate,
   other,
 } from "./compose";
-import type { ChatAnswer, ChatTurn, UsedMemory } from "./types";
+import { Context } from "./context";
+import { isModelConfigured, runChat, type ChatMessage, type ModelReply } from "./model";
+import { buildSystemPrompt, SCOPE_REMINDER, wrapQuestion } from "./prompt";
+import { runTool, TOOLS } from "./tools";
+import type { AnswerBlock, ChatAnswer, ChatTurn, UsedMemory } from "./types";
 
 /**
  * The agent.
@@ -400,134 +404,154 @@ function windowStart(ctx: Ctx, fallback?: string): string {
 
 // -------------------------------------------------------------------- entry
 
-export async function ask(question: string, history: ChatTurn[] = []): Promise<ChatAnswer> {
-  // A follow-up like "why?" or "who owns it?" carries no subject of its own.
-  // Borrowing the previous question's words for retrieval keeps the thread
-  // without pretending the agent holds a conversational state it does not.
-  const previous = [...history].reverse().find((turn) => turn.role === "user")?.content;
-  const forRetrieval =
-    previous && question.split(/\s+/).length <= 4 ? `${question} ${previous}` : question;
+/** How many rounds of tool calls before the agent must answer with what it has. */
+const MAX_TOOL_ROUNDS = 4;
 
-  const retrieval: RetrievalResult = await retrieve(forRetrieval, { limit: 8 });
+/**
+ * Turn the model's prose into blocks, lifting `[n]` markers out of the text and
+ * onto the block that carried them. A citation the context never issued is
+ * dropped rather than rendered: a number pointing at nothing is worse than no
+ * number, because it looks like evidence.
+ */
+function toBlocks(text: string, valid: Set<number>): AnswerBlock[] {
+  const blocks: AnswerBlock[] = [];
 
-  // Every event behind every retrieved memory, so a citation always resolves to
-  // the source a user can open rather than to a bare source type.
-  const eventIds = [
-    ...new Set([
-      ...retrieval.evidence.map((e) => e.id),
-      ...retrieval.memories.flatMap((m) => m.entity.sources.map((s) => s.eventId)),
-      ...retrieval.edges.flatMap((e) => e.sources.map((s) => s.eventId)),
-    ]),
-  ];
-  const events = await getStorage().raw.list({ ids: eventIds });
-  const evidence = new Map<string, RawEvent>(events.map((e) => [e.id, e]));
+  for (const raw of text.split(/\n+/)) {
+    const line = raw.trim();
+    if (!line) continue;
 
-  const composer = new Composer(evidence);
-  const ctx = new Ctx(question, retrieval.memories, retrieval.edges, composer);
+    const kind: AnswerBlock["kind"] = /^[-*•]\s+/.test(line) ? "bullet" : "paragraph";
+    const cited = [...line.matchAll(/\[(\d+)\]/g)]
+      .map((m) => Number(m[1]))
+      .filter((n) => valid.has(n));
 
-  let handled = false;
-  switch (retrieval.intent.kind) {
-    case "why":
-      handled = await answerWhy(ctx);
-      break;
-    case "who_owns":
-      handled = await answerWhoOwns(ctx);
-      break;
-    case "how":
-      handled = await answerHow(ctx);
-      break;
-    case "summarize":
-      handled = await answerSummarize(ctx);
-      break;
-    case "changed":
-      handled = await answerChanged(ctx, windowStart(ctx, retrieval.intent.since));
-      break;
-    case "when":
-      handled = await answerWhen(ctx);
-      break;
-    default:
-      handled = false;
+    const body = line
+      .replace(/^[-*•]\s+/, "")
+      .replace(/\[\d+\]/g, "")
+      .replace(/\s+([.,;:])/g, "$1")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+
+    if (body) blocks.push({ kind, text: body, citations: [...new Set(cited)] });
   }
 
-  // Every shape falls back to the general one rather than to invention.
-  if (!handled) handled = await answerGeneral(ctx);
+  return blocks;
+}
 
-  const { blocks, citations } = composer.result;
-  const citedEvents = new Set(citations.map((c) => c.eventId));
+function fallback(text: string): ChatAnswer["blocks"] {
+  return [{ kind: "paragraph", text, citations: [] }];
+}
 
-  const reasonsFor = new Map(retrieval.memories.map((m) => [m.entity.id, m]));
-  const used: UsedMemory[] = [...ctx.byId.values()]
-    .filter((entity) => entity.sources.some((s) => citedEvents.has(s.eventId)))
-    .map((entity) => ({
-      id: entity.id,
-      type: entity.type,
-      title: entity.title,
-      summary: entity.summary,
-      confidence: entity.confidence,
-      occurredAt: entity.occurredAt,
-      reasons: reasonsFor.get(entity.id)?.reasons ?? ["reached through the memory graph"],
-      hop: reasonsFor.get(entity.id)?.hop ?? 1,
-    }))
-    .sort((a, b) => a.hop - b.hop || b.confidence - a.confidence);
+/**
+ * Answer a question.
+ *
+ * Retrieval runs first and unconditionally: the model never sees the question
+ * without also seeing what memory holds about it, so its default state is
+ * informed rather than imaginative. From there it may search again or sync a
+ * source, but every route to a fact goes back through retrieval — which is what
+ * makes "memory has nothing on that" a reachable answer instead of a promise.
+ */
+export async function ask(question: string, history: ChatTurn[] = []): Promise<ChatAnswer> {
+  const answeredAt = () => new Date().toISOString();
+  const intent = analyzeIntent(question);
 
-  const confidence = used.length
-    ? used.reduce((sum, m) => sum + m.confidence, 0) / used.length
-    : 0;
-
-  /**
-   * The one thing the agent must never do is answer anyway.
-   *
-   * Blocks with no citation behind them are not an answer, and neither is a
-   * claim resting entirely on memories the extractor was unsure of. Both cases
-   * are treated the same way: throw the draft away and say what is missing.
-   * A user who is told the knowledge is not there can go and connect it; a user
-   * who is given a confident guess cannot tell that anything is wrong.
-   */
-  const grounded = citations.length > 0 && confidence >= 0.6;
-
-  if (!grounded) {
-    const connected = listIntegrationSummaries().filter((i) => i.status === "connected");
+  if (!isModelConfigured()) {
     return {
       question,
-      intent: retrieval.intent.kind,
-      blocks: [
-        { kind: "paragraph", text: "I don't have enough information about this yet.", citations: [] },
-        {
-          kind: "paragraph",
-          text:
-            connected.length === 0
-              ? "Nothing is connected yet, so there is no company knowledge for me to read. Connect your company tools or upload additional information so I can answer this accurately."
-              : `I currently learn from ${connected
-                  .map((i) => i.name)
-                  .join(", ")}. Connect more company tools or upload additional information so I can answer this accurately.`,
-          citations: [],
-        },
-      ],
+      intent: intent.kind,
+      blocks: fallback("No language model is configured, so I cannot answer right now."),
       citations: [],
       memories: [],
       edges: [],
       confidence: 0,
       grounded: false,
       followUps: [],
-      answeredAt: new Date().toISOString(),
+      answeredAt: answeredAt(),
     };
   }
 
+  const context = new Context();
+  const opening = context.absorb(await retrieve(question), "MEMORY FOR THIS QUESTION");
+
+  const messages: ChatMessage[] = [
+    { role: "system", content: buildSystemPrompt() },
+    ...history.map(
+      (turn): ChatMessage => ({
+        role: turn.role === "agent" ? "assistant" : "user",
+        content: turn.content,
+      }),
+    ),
+    { role: "system", content: opening },
+    { role: "user", content: wrapQuestion(question) },
+    { role: "system", content: SCOPE_REMINDER },
+  ];
+
+  /** Answer the pending tool calls, so the conversation is well-formed again. */
+  const settle = async (pending: ModelReply) => {
+    messages.push({
+      role: "assistant",
+      content: pending.content,
+      tool_calls: pending.toolCalls,
+    });
+    for (const call of pending.toolCalls) {
+      const outcome = await runTool(
+        call.function.name,
+        call.function.arguments,
+        context,
+        question,
+      );
+      messages.push({ role: "tool", content: outcome.text, tool_call_id: call.id });
+    }
+    // The boundary is restated after every tool round: tool output is the most
+    // recent thing the model read, and it is the easiest place for it to drift.
+    messages.push({ role: "system", content: SCOPE_REMINDER });
+  };
+
+  let reply = await runChat(messages, TOOLS);
+
+  for (let round = 0; round < MAX_TOOL_ROUNDS && reply?.toolCalls.length; round += 1) {
+    await settle(reply);
+    reply = await runChat(messages, TOOLS);
+  }
+
+  // A model that spends its last round calling tools leaves no prose behind.
+  // Withdrawing the tools removes the option and forces the answer it already
+  // has the material for — silence here would read as "memory has nothing",
+  // which is a different and much worse claim.
+  if (!reply?.content?.trim()) {
+    if (reply?.toolCalls.length) await settle(reply);
+    messages.push({
+      role: "system",
+      content:
+        "Answer now, in prose, from the memory blocks above. No more tools. If " +
+        "those blocks do not cover the question, say plainly that memory holds " +
+        "nothing on it.",
+    });
+    reply = await runChat(messages);
+  }
+
+  const { citations, memories, edges, confidence } = context.result;
+  const valid = new Set(citations.map((c) => c.index));
+  const text = reply?.content?.trim() ?? "";
+
+  const blocks = text
+    ? toBlocks(text, valid)
+    : fallback("I could not produce an answer to that. Try asking it another way.");
+
+  // Cited claims are what memory carried. A block-free or citation-free answer
+  // is an admission, and the UI is told so rather than left to guess.
+  const grounded = memories.length > 0 && blocks.some((b) => b.citations.length > 0);
+
   return {
     question,
-    intent: retrieval.intent.kind,
-    blocks,
-    citations,
-    memories: used.slice(0, 10),
-    edges: retrieval.edges.slice(0, 24).map((e) => ({
-      type: e.type,
-      from: e.fromId,
-      to: e.toId,
-      note: e.note,
-    })),
-    confidence,
-    grounded: true,
-    followUps: followUps(question, used),
-    answeredAt: new Date().toISOString(),
+    intent: intent.kind,
+    blocks: blocks.length ? blocks : fallback(text || "I have nothing on that."),
+    citations: citations.filter((c) => blocks.some((b) => b.citations.includes(c.index))),
+    memories,
+    edges,
+    confidence: grounded ? confidence : 0,
+    grounded,
+    followUps: grounded ? followUps(question, memories) : [],
+    answeredAt: answeredAt(),
   };
 }

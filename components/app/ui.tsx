@@ -33,6 +33,8 @@ const SOURCE_LABEL: Record<SourceType, string> = {
   "slack.member": "directory",
   "github.pull_request": "pull request",
   "github.issue": "issue",
+  "github.commit": "commit",
+  "github.repository": "repository",
   "notion.page": "page",
   "gdocs.document": "document",
   "gdrive.file": "file",

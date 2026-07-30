@@ -19,39 +19,23 @@ type GoogleFile = {
 
 const DOCS: GoogleFile[] = [
   {
-    id: "doc-atlas-launch-plan",
-    name: "Atlas launch plan v3",
-    owner: "Marcus Webb",
+    id: "doc-beta-launch-plan",
+    name: "Relay beta launch plan v3",
+    owner: "Dana Okafor",
     modifiedAt: "2026-07-13T14:25:00Z",
     mimeType: "application/vnd.google-apps.document",
-    text: "Project Atlas launch plan, version 3. Launch date: 13 August 2026, revised from 16 July after the launch review. Launch is gated on ATLAS-214, SAML SSO, owned by Priya Raman. Go or no go call on 11 August. Vantage Health onboards the week of 17 August. Customer comms written by Theo Novak. Version 2 assumed a 16 July date and is superseded.",
-  },
-  {
-    id: "doc-q3-roadmap",
-    name: "Q3 2026 roadmap",
-    owner: "Dana Okafor",
-    modifiedAt: "2026-06-26T08:00:00Z",
-    mimeType: "application/vnd.google-apps.document",
-    text: "Q3 priorities. One: launch Project Atlas. Two: Project Beacon rebuilds customer onboarding, target under three days. Three: Project Meridian public beta. Vantage Health signs in August, Kestrel Logistics renews in September.",
+    text: "Relay public beta plan, version 3. Launch date: 13 August 2026, revised from 16 July after the launch review. Launch is gated on RELAY-214, persistent storage, owned by Ines Duarte. Northwind Labs onboards the week of 17 August.",
   },
 ];
 
 const DRIVE: GoogleFile[] = [
   {
-    id: "file-vantage-msa",
-    name: "Vantage Health MSA (signed).pdf",
-    owner: "Theo Novak",
-    modifiedAt: "2026-06-30T12:00:00Z",
-    mimeType: "application/pdf",
-    text: "Master services agreement with Vantage Health, signed 30 June 2026. Security schedule requires single sign on via SAML for all administrative access. Initial term twelve months.",
-  },
-  {
-    id: "file-atlas-arch",
-    name: "Atlas architecture.excalidraw",
-    owner: "Yuki Tanaka",
+    id: "file-relay-arch",
+    name: "Relay architecture.excalidraw",
+    owner: "Priya Raman",
     modifiedAt: "2026-05-21T17:45:00Z",
     mimeType: "application/octet-stream",
-    text: "Diagram of Project Atlas services: gateway, identity, ledger on PostgreSQL, provisioning API used by Project Beacon.",
+    text: "Diagram of the Relay pipeline: connectors, raw event storage, extraction, the memory graph on PostgreSQL, retrieval, then the agent.",
   },
 ];
 

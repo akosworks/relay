@@ -7,7 +7,11 @@
       "Bash(echo \"LINT_EXIT=$?\")",
       "PowerShell(Get-CimInstance Win32_Process -Filter \"ProcessId = 31608\")",
       "Bash(npx prettier *)",
-      "Bash(sed -i 's/import { AnimatePresence, motion } from \"motion\\\\/react\";/import { motion } from \"motion\\\\/react\";/' components/app/Chat.tsx)"
+      "Bash(sed -i 's/import { AnimatePresence, motion } from \"motion\\\\/react\";/import { motion } from \"motion\\\\/react\";/' components/app/Chat.tsx)",
+      "PowerShell(npx tsc --noEmit -p tsconfig.json)",
+      "PowerShell(if \\($?\\) { \"typecheck ok\" })",
+      "Bash(git checkout *)",
+      "Bash(python -)"
     ]
   }
 }

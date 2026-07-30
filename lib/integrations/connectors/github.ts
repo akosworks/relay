@@ -1,6 +1,14 @@
 import type { Connector, ConnectorEvent } from "../types";
+import { fetchGithubEvents, getGithubConfig } from "./github-api";
 
-/** GitHub. Where intent turns into shipped change, with authorship attached. */
+/**
+ * GitHub. Where intent turns into shipped change, with authorship attached.
+ *
+ * The only connector here that can read a real account: set `GITHUB_TOKEN` and
+ * `GITHUB_REPOS` and it pulls from the API, otherwise it falls back to the
+ * fixtures below. The token takes precedence over the mock switch — once a real
+ * repository is being read, fixtures would only pollute it.
+ */
 
 type PullRequest = {
   number: number;
@@ -27,58 +35,37 @@ type Issue = {
 
 const PULL_REQUESTS: PullRequest[] = [
   {
-    number: 476,
-    repo: "atlas",
-    title: "Idempotent payment intents",
-    author: "Ines Duarte",
-    state: "merged",
-    createdAt: "2026-06-11T10:00:00Z",
-    mergedAt: "2026-06-15T12:41:00Z",
-    body: "Makes payment intent creation idempotent on a client supplied key so retries in the ledger cannot double charge. Part of Project Atlas.",
-    reviewers: ["Yuki Tanaka"],
-  },
-  {
     number: 482,
-    repo: "atlas",
-    title: "SAML assertion validation",
-    author: "Priya Raman",
+    repo: "relay",
+    title: "Postgres-backed MemoryStore",
+    author: "Ines Duarte",
     state: "open",
     createdAt: "2026-07-02T09:15:00Z",
-    body: "First half of ATLAS-214. Validates SAML assertions from Okta and Entra, including signature and audience checks. Still open: identity provider metadata refresh and signed logout, which is why authentication cannot ship yet. Blocks the Project Atlas launch.",
-    reviewers: ["Dana Okafor", "Yuki Tanaka"],
+    body: "First half of RELAY-214. Entities and relationships in Postgres behind the existing store interface. Still open: raw event storage and the bootstrap path, which is why persistence cannot ship yet. Blocks the Relay public beta.",
+    reviewers: ["Dana Okafor"],
   },
   {
     number: 491,
-    repo: "atlas",
-    title: "Session cookie rotation on privilege change",
+    repo: "relay",
+    title: "Refuse to answer from unretrieved memory",
     author: "Priya Raman",
     state: "merged",
     createdAt: "2026-07-12T14:00:00Z",
     mergedAt: "2026-07-15T12:50:00Z",
-    body: "Rotates the session token whenever a user's privileges change. Closes the last item from the Vantage Health security review other than SSO. Authentication is owned by Priya Raman.",
+    body: "The agent now answers only from memories retrieval actually reached. Closes the last item from the Northwind Labs evaluation other than persistence. Retrieval is owned by Priya Raman.",
     reviewers: ["Dana Okafor"],
-  },
-  {
-    number: 118,
-    repo: "meridian",
-    title: "Fix cold start crash on Android 15",
-    author: "Yuki Tanaka",
-    state: "open",
-    createdAt: "2026-07-22T08:30:00Z",
-    body: "Attempted fix for MER-77. The crash happens when the cached session is restored before the main thread is ready. Blocks the Project Meridian public beta.",
-    reviewers: ["Priya Raman"],
   },
 ];
 
 const ISSUES: Issue[] = [
   {
     number: 505,
-    repo: "atlas",
-    title: "Webhook retries drop events after three failures",
+    repo: "relay",
+    title: "Memory does not survive a serverless deploy",
     author: "Theo Novak",
     state: "open",
     createdAt: "2026-07-18T13:20:00Z",
-    body: "Kestrel Logistics reported that webhook deliveries stop retrying after three failures and the event is lost. Affects Project Atlas. Assigned to Ines Duarte.",
+    body: "Northwind Labs reported that Relay forgets everything between requests on a hosted deploy. The memory graph lives in process. Assigned to Ines Duarte.",
     labels: ["bug", "customer"],
   },
 ];
@@ -86,11 +73,21 @@ const ISSUES: Issue[] = [
 export const githubConnector: Connector = {
   id: "github",
   name: "GitHub",
-  blurb: "Pull requests and issues, with who wrote and who reviewed.",
+  blurb: "Repositories, commits, pull requests and issues, with who wrote and who reviewed.",
   category: "code",
-  sourceTypes: ["github.pull_request", "github.issue"],
-  teaches: ["feature", "issue", "person", "project", "task"],
-  async fetch({ since, limit } = {}) {
+  sourceTypes: [
+    "github.repository",
+    "github.commit",
+    "github.pull_request",
+    "github.issue",
+  ],
+  teaches: ["project", "feature", "issue", "person", "task", "document"],
+  isLive: () => getGithubConfig() !== null,
+  async fetch(options = {}) {
+    const config = getGithubConfig();
+    if (config) return fetchGithubEvents(config, options);
+
+    const { since, limit } = options;
     const prs: ConnectorEvent[] = PULL_REQUESTS.map((pr) => ({
       sourceType: "github.pull_request",
       externalId: `${pr.repo}#${pr.number}`,

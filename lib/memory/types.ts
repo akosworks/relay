@@ -50,6 +50,8 @@ export type SourceType =
   | "slack.member"
   | "github.pull_request"
   | "github.issue"
+  | "github.commit"
+  | "github.repository"
   | "notion.page"
   | "gdocs.document"
   | "gdrive.file"

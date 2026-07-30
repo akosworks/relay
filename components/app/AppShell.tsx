@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import { Logo } from "@/components/Logo";
 import { EASE } from "@/lib/motion";
@@ -28,7 +28,16 @@ const LINKS = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { openAsk } = useAsk();
+
+  const signOut = async () => {
+    await fetch("/api/session", { method: "DELETE" }).catch(() => undefined);
+    router.push("/login");
+    // The proxy reads the cookie on the server, so the next route has to come
+    // from there rather than from the client's cache of the signed-in one.
+    router.refresh();
+  };
 
   return (
     <div className="relative min-h-[100svh]">
@@ -91,6 +100,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <kbd className="rounded-[7px] bg-ink/[0.045] px-[7px] py-[3px] font-sans text-[11px] tracking-[0.02em] text-ink-45">
               ⌘K
             </kbd>
+          </button>
+
+          {/* A door you cannot leave by is not a door. */}
+          <button
+            type="button"
+            onClick={signOut}
+            className="shrink-0 text-[13px] tracking-[-0.01em] text-ink-25 transition-colors duration-400 hover:text-ink-45"
+          >
+            Sign out
           </button>
         </nav>
       </motion.header>

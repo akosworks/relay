@@ -1,5 +1,6 @@
 import { getExtractor, MentionResolver } from "@/lib/extraction";
 import { getConnector } from "@/lib/integrations/registry";
+import { fetchFromSource } from "@/lib/integrations/source";
 import { getIntegrationState, setIntegrationState } from "@/lib/integrations/state";
 import { entityId, entityKey, eventId, relationshipId } from "@/lib/memory/keys";
 import type {
@@ -95,7 +96,7 @@ export async function syncIntegration(
 
   setIntegrationState(integrationId, { status: "syncing" });
 
-  const fetched = await connector.fetch({
+  const fetched = await fetchFromSource(connector, {
     since: options.full ? undefined : (state?.lastSyncAt ?? undefined),
   });
 

@@ -34,6 +34,13 @@ export interface Connector {
   sourceTypes: SourceType[];
   /** The kinds of memory this source tends to produce. Shown to the user. */
   teaches: EntityType[];
+  /**
+   * Whether this connector is configured to read a real account right now.
+   * Undefined means "fixtures only" — the mock switch decides whether it runs
+   * at all. Checked rather than stored so adding credentials takes effect on
+   * the next sync instead of the next restart.
+   */
+  isLive?(): boolean;
   fetch(options?: FetchOptions): Promise<ConnectorEvent[]>;
 }
 
@@ -67,4 +74,6 @@ export interface IntegrationSummary extends IntegrationState {
   blurb: string;
   category: ConnectorCategory;
   teaches: EntityType[];
+  /** Reading a real account. The card says so, because it changes what an answer means. */
+  live: boolean;
 }

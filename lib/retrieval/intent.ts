@@ -16,7 +16,8 @@ export type IntentKind =
   | "summarize"
   | "changed"
   | "when"
-  | "general";
+  | "general"
+  | "direct_capability";
 
 export interface Intent {
   kind: IntentKind;

@@ -2,12 +2,19 @@
 
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { startOfDay } from "@/lib/memory/dates";
 import { isTodays } from "@/lib/workspace/stats";
 import { EASE } from "@/lib/motion";
 import { useNow } from "@/lib/useClock";
 import { useAsk } from "./Ask";
+import {
+  Composer,
+  Openers,
+  openersFrom,
+  Thread,
+  useConversation,
+} from "./Conversation";
 import { EntityDrawer } from "./EntityDrawer";
 import { TaskCheck } from "./TaskRow";
 import { useWorkspace } from "./WorkspaceProvider";
@@ -60,10 +67,22 @@ function greeting(now: Date | null): string {
 
 export function Dashboard() {
   const { tasks, events, stats, overview, agenda, today, toggleTask } = useWorkspace();
-  const { openAsk } = useAsk();
-  const [draft, setDraft] = useState("");
+  const { exchanges, draft, setDraft, pending, ask, reset, inputRef } = useConversation();
+  const { registerInline } = useAsk();
   const [openEntity, setOpenEntity] = useState<string | null>(null);
   const now = useNow();
+
+  // Asking takes over the page. The panels are not hidden behind the answer —
+  // they step aside for it, because once you have asked, the answer is the only
+  // thing on the page you care about.
+  const asking = exchanges.length > 0;
+  const openers = openersFrom(overview);
+
+  // While home is on screen, Command-K belongs to the field below the greeting.
+  useEffect(() => {
+    registerInline(() => inputRef.current?.focus());
+    return () => registerInline(null);
+  }, [inputRef, registerInline]);
 
   const connected = overview?.integrations.filter((i) => i.status !== "disconnected") ?? [];
 
@@ -79,14 +98,6 @@ export function Dashboard() {
     });
 
   const upcoming = events.filter((event) => event.date >= today).slice(0, 5);
-
-  const submitQuestion = (e: React.FormEvent) => {
-    e.preventDefault();
-    const question = draft.trim();
-    if (!question) return;
-    setDraft("");
-    openAsk(question);
-  };
 
   return (
     <>
@@ -112,40 +123,58 @@ export function Dashboard() {
             )}
           </p>
 
-          {/* Not a link and not a page. Typing here and pressing return opens the
-              overlay with the question already asked. */}
-          <form onSubmit={submitQuestion} className="relative mt-10 max-w-[600px]">
-            <input
+          {/* The field is the conversation. Asking here does not navigate and
+              does not open anything over the top: the answer arrives underneath
+              it, on this page. */}
+          <div className="mt-10 max-w-[680px] rounded-[28px] border border-rule bg-paper px-1.5 py-0.5 shadow-soft transition-[border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] focus-within:border-blue focus-within:shadow-lift hover:border-ink-25">
+            <Composer
+              ref={inputRef}
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onFocus={() => {
-                // Focusing the field is a request to ask something, so the real
-                // surface comes forward straight away and takes the keystrokes.
-                if (!draft) openAsk();
-              }}
+              onChange={setDraft}
+              onSubmit={() => ask(draft)}
+              pending={pending}
               placeholder="Ask Relay something…"
-              aria-label="Ask Relay something"
-              className="h-[54px] w-full rounded-full border border-rule bg-paper pl-6 pr-[58px] text-[16px] tracking-[-0.013em] text-ink shadow-soft outline-none transition-[border-color,box-shadow] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] placeholder:text-ink-25 hover:border-ink-25 focus:border-blue focus:shadow-lift"
             />
-            <button
-              type="submit"
-              aria-label="Ask"
-              className="absolute right-[7px] top-[7px] flex h-[40px] w-[40px] items-center justify-center rounded-full bg-ink text-paper transition-all duration-400 hover:bg-blue"
-            >
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path
-                  d="M8 13V3M8 3L3.5 7.5M8 3l4.5 4.5"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-          </form>
+          </div>
+
+          {/* Before the first question, three things this memory can actually
+              answer. They disappear once there is a real thread to read. */}
+          {!asking && openers.length > 0 && (
+            <div className="mt-5 max-w-[680px]">
+              <Openers questions={openers} onAsk={ask} />
+            </div>
+          )}
         </motion.header>
 
-        <div className="grid gap-3 lg:grid-cols-[1.35fr_1fr]">
+        <AnimatePresence>
+          {asking && (
+            <motion.section
+              key="thread"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.45, ease: EASE.out }}
+              className="max-w-[680px] pb-4"
+            >
+              <Thread
+                exchanges={exchanges}
+                onAsk={ask}
+                onOpenEntity={setOpenEntity}
+                className="space-y-10"
+              />
+
+              <button
+                type="button"
+                onClick={reset}
+                className="mt-10 text-[13px] tracking-[-0.01em] text-ink-45 transition-colors duration-400 hover:text-blue"
+              >
+                Clear and go back to home
+              </button>
+            </motion.section>
+          )}
+        </AnimatePresence>
+
+        <div className={`grid gap-3 lg:grid-cols-[1.35fr_1fr] ${asking ? "hidden" : ""}`}>
           <div className="grid gap-3 lg:content-start">
             {/* ------------------------------------------------ today's tasks */}
             <Panel className="px-7 py-7" delay={0.05}>
@@ -431,7 +460,7 @@ export function Dashboard() {
         onOpenEntity={setOpenEntity}
         onAsk={(question) => {
           setOpenEntity(null);
-          openAsk(question);
+          ask(question);
         }}
       />
     </>

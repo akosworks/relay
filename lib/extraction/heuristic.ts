@@ -128,6 +128,33 @@ function personFrom(
   });
 }
 
+/**
+ * The project a piece of GitHub work belongs to.
+ *
+ * A stub, deliberately: the repository event carries the real description, and
+ * both resolve to the same key, so whichever arrives first is filled in by the
+ * other rather than duplicated. Low confidence keeps the stub from outranking
+ * the description when they merge.
+ */
+function projectFor(
+  repo: string | undefined,
+  c: Collector,
+  excerpt: string,
+): KnownEntity | null {
+  if (!repo) return null;
+  const name = repo.split("/")[1] ?? repo;
+  return c.entity({
+    type: "project",
+    title: name,
+    keyHint: repo.toLowerCase(),
+    summary: `${name} is a repository on GitHub.`,
+    confidence: 0.7,
+    excerpt,
+    attributes: { repo },
+    aliases: [repo.toLowerCase(), name.toLowerCase()],
+  });
+}
+
 function cleanPhrase(phrase: string): string {
   return phrase
     .replace(/\s+/g, " ")
@@ -230,6 +257,73 @@ function structural(event: RawEvent, c: Collector): KnownEntity | null {
       });
     }
 
+    /**
+     * A repository is a project. That is not an inference to be made by a
+     * model — it is what the connector fetched — so it is asserted here at
+     * high confidence, and everything else in the repository hangs off it.
+     */
+    case "github.repository": {
+      const repo = str("repo") ?? event.title;
+      const name = repo.split("/")[1] ?? repo;
+      // Skip the generated first line; the description or README opening is
+      // what actually says what the project is.
+      const described = event.body.split("\n\n").slice(1).join(" ").trim();
+      return c.entity({
+        type: "project",
+        title: name,
+        keyHint: repo.toLowerCase(),
+        summary:
+          described.split(/(?<=\.)\s/)[0]?.slice(0, 300) ||
+          `${name} is a repository on GitHub.`,
+        confidence: 0.92,
+        excerpt: event.body,
+        attributes: {
+          repo,
+          language: str("language") ?? null,
+          topics: Array.isArray(meta.topics) ? (meta.topics as string[]) : [],
+          defaultBranch: str("defaultBranch") ?? null,
+          url: event.url ?? null,
+        },
+        aliases: [repo.toLowerCase(), name.toLowerCase()],
+      });
+    }
+
+    /**
+     * A commit is work that actually landed. Recorded as a completed task so
+     * "what has been done in this repository" is answerable from the graph
+     * rather than from a wall of raw messages.
+     */
+    case "github.commit": {
+      const repo = str("repo");
+      const subject = str("subject") ?? event.title;
+      const change = c.entity({
+        type: "task",
+        title: subject,
+        keyHint: event.externalId.toLowerCase(),
+        summary: `${subject} — committed to ${repo ?? "the repository"}.`,
+        confidence: 0.82,
+        excerpt: event.body,
+        attributes: {
+          repo: repo ?? null,
+          sha: str("sha") ?? null,
+          status: "done",
+          author: event.author ?? null,
+        },
+      });
+      const author = personFrom(event.author, c, 0.85, event.body);
+      c.link("assigned_to", change, author, {
+        confidence: 0.9,
+        excerpt: event.body,
+        note: "authored the commit",
+      });
+      c.link("affects", change, projectFor(repo, c, event.body), {
+        confidence: 0.85,
+        excerpt: event.body,
+        note: "committed to this repository",
+      });
+      return change;
+    }
+
     case "github.pull_request": {
       const feature = c.entity({
         type: "feature",
@@ -252,6 +346,11 @@ function structural(event: RawEvent, c: Collector): KnownEntity | null {
         excerpt: event.body,
         note: "authored the pull request",
       });
+      c.link("affects", feature, projectFor(str("repo"), c, event.body), {
+        confidence: 0.85,
+        excerpt: event.body,
+        note: "opened against this repository",
+      });
       return feature;
     }
 
@@ -271,6 +370,11 @@ function structural(event: RawEvent, c: Collector): KnownEntity | null {
         aliases: [event.externalId.toLowerCase()],
       });
       personFrom(event.author, c, 0.85, event.body);
+      c.link("affects", issue, projectFor(str("repo"), c, event.body), {
+        confidence: 0.85,
+        excerpt: event.body,
+        note: "reported against this repository",
+      });
       return issue;
     }
 

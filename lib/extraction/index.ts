@@ -1,4 +1,5 @@
 import { heuristicExtractor } from "./heuristic";
+import { llmExtractor } from "./llm";
 import type { Extractor } from "./types";
 
 export type { Extractor, ExtractionContext } from "./types";
@@ -14,9 +15,17 @@ export { MentionResolver } from "./resolver";
  */
 const EXTRACTORS: Record<string, Extractor> = {
   [heuristicExtractor.id]: heuristicExtractor,
+  [llmExtractor.id]: llmExtractor,
 };
 
+function hasLlmConfig(): boolean {
+  return Boolean(process.env.OPENAI_API_KEY?.trim() || process.env.GROQ_API_KEY?.trim());
+}
+
 export function getExtractor(id = process.env.RELAY_EXTRACTOR ?? heuristicExtractor.id): Extractor {
+  if (id === llmExtractor.id && !hasLlmConfig()) {
+    return heuristicExtractor;
+  }
   return EXTRACTORS[id] ?? heuristicExtractor;
 }
 

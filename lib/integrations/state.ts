@@ -62,6 +62,7 @@ export function listIntegrationSummaries(): IntegrationSummary[] {
       blurb: c.blurb,
       category: c.category,
       teaches: c.teaches,
+      live: c.isLive?.() ?? false,
     };
   });
 }
@@ -76,5 +77,6 @@ export function integrationSummary(id: string): IntegrationSummary | null {
     blurb: connector.blurb,
     category: connector.category,
     teaches: connector.teaches,
+    live: connector.isLive?.() ?? false,
   };
 }
