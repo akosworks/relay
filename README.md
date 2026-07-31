@@ -27,7 +27,7 @@ The application will be available locally once the development server has starte
 
 ---
 
-## Demo Login
+## Demo Login (TEST USE ON DEPLOYED DEMO)
 
 Use the following credentials to access the demo:
 
@@ -42,7 +42,7 @@ fun@relay.com
 ```
 iloverelay
 ```
-
+Go to the integrations tab and add GitHub (for real data pull capability). Add other connectors for mock data. 
 ---
 
 ## Pages
