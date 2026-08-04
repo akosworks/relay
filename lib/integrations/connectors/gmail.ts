@@ -1,6 +1,14 @@
 import type { Connector, ConnectorEvent } from "../types";
+import { fetchGmailImapEvents, getGmailImapConfig } from "./gmail-imap";
 
-/** Gmail. Where customer commitments are actually made. */
+/**
+ * Gmail. Where customer commitments are actually made.
+ *
+ * Set `GMAIL_IMAP_USER` and `GMAIL_IMAP_APP_PASSWORD` and this reads a real
+ * inbox over IMAP, read-only; otherwise it falls back to the fixtures below.
+ * Same precedence as GitHub: a configured account is read regardless of the
+ * mock-data switch, because that switch governs fixtures, not your own data.
+ */
 
 type Thread = {
   id: string;
@@ -37,7 +45,12 @@ export const gmailConnector: Connector = {
   category: "email",
   sourceTypes: ["gmail.thread"],
   teaches: ["customer", "issue", "decision", "person"],
-  async fetch({ since, limit } = {}) {
+  isLive: () => getGmailImapConfig() !== null,
+  async fetch(options = {}) {
+    const config = getGmailImapConfig();
+    if (config) return fetchGmailImapEvents(config, options);
+
+    const { since, limit } = options;
     const events: ConnectorEvent[] = THREADS.map((t): ConnectorEvent => ({
       sourceType: "gmail.thread",
       externalId: t.id,

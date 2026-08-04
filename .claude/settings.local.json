@@ -13,7 +13,11 @@
       "Bash(git checkout *)",
       "Bash(python -)",
       "Bash(npm install *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/imapflow/package.json'\\).types || require\\('./node_modules/imapflow/package.json'\\).typings || 'none'\\)\")",
+      "Bash(powershell -NoProfile -Command \"Get-Process -Id \\(Get-NetTCPConnection -LocalPort 3210 -ErrorAction SilentlyContinue\\).OwningProcess -ErrorAction SilentlyContinue | Select-Object Id,ProcessName\")",
+      "Bash(netstat -ano)",
+      "Bash(tasklist //FI \"PID eq 16544\")"
     ]
   }
 }
