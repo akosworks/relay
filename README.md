@@ -8,7 +8,7 @@ Relay is an AI-powered organizational memory that connects to the tools a compan
 
 * **Frontend:** Next.js, React, TypeScript
 * **Backend:** Next.js API Routes
-* **AI:** Rule-based extraction with optional LLM-powered extraction (Groq or OpenAI-compatible providers)
+* **AI:** LLM-powered extraction (Groq or OpenAI-compatible providers)
 * **Integrations:** GitHub, Slack, Notion, Gmail, Google Drive, Google Docs, Jira, Linear
 * **Deployment:** Compatible with modern Node.js hosting platforms such as Render and Vercel (persistent storage recommended for production deployments)
 
