@@ -27,10 +27,11 @@ export interface MemoryOverview {
 
 export async function getMemoryOverview(): Promise<MemoryOverview> {
   const storage = getStorage();
-  const [stats, entities, events] = await Promise.all([
+  const [stats, entities, events, integrations] = await Promise.all([
     storage.memory.stats(),
     storage.memory.listEntities(),
     storage.raw.count(),
+    listIntegrationSummaries(),
   ]);
 
   const recent = [...entities]
@@ -51,7 +52,7 @@ export async function getMemoryOverview(): Promise<MemoryOverview> {
     relationships: stats.relationships,
     events,
     entitiesByType: stats.entitiesByType,
-    integrations: listIntegrationSummaries(),
+    integrations,
     recent,
   };
 }

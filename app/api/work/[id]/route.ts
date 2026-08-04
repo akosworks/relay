@@ -22,6 +22,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return Response.json({ error: "`done` must be true or false." }, { status: 400 });
   }
 
-  setOverride(id, body.done);
+  await setOverride(id, body.done);
   return Response.json(await getBoard());
 }

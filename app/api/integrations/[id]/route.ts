@@ -26,12 +26,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   try {
     if (action === "disconnect") {
       await disconnectIntegration(id);
-      return Response.json({ integration: integrationSummary(id), report: null });
+      return Response.json({ integration: await integrationSummary(id), report: null });
     }
 
     const report =
       action === "connect" ? await connectIntegration(id) : await syncIntegration(id);
-    return Response.json({ integration: integrationSummary(id), report });
+    return Response.json({ integration: await integrationSummary(id), report });
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : "Sync failed" },

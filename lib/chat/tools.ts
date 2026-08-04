@@ -89,8 +89,8 @@ async function runSearch(context: Context, query: string): Promise<ToolOutcome> 
   };
 }
 
-function describeSources(): string {
-  const summaries = listIntegrationSummaries();
+async function describeSources(): Promise<string> {
+  const summaries = await listIntegrationSummaries();
   const lines = summaries.map((s) => {
     const connector = getConnector(s.id);
     const reading = s.live
@@ -174,7 +174,7 @@ export async function runTool(
       return runSearch(context, query);
     }
     case "list_sources":
-      return { text: describeSources(), retrieved: false };
+      return { text: await describeSources(), retrieved: false };
     case "sync_source": {
       const source = typeof args.source === "string" ? args.source.trim() : "";
       if (!source) {

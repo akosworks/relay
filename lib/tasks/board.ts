@@ -1,7 +1,7 @@
 import { isoDay, toISODate } from "@/lib/memory/dates";
 import type { Entity, EntityType } from "@/lib/memory/types";
 import { getStorage } from "@/lib/storage";
-import { allOverrides } from "./state";
+import { allOverrides, type TaskOverride } from "./state";
 
 /**
  * The board, read out of memory.
@@ -83,10 +83,10 @@ function attributeString(entity: Entity, ...keys: string[]): string | null {
   return null;
 }
 
-function toWorkItem(entity: Entity): WorkItem {
+function toWorkItem(entity: Entity, overrides: Map<string, TaskOverride>): WorkItem {
   const state = attributeString(entity, "state", "status");
   const due = attributeString(entity, "dueDate");
-  const override = allOverrides().get(entity.id);
+  const override = overrides.get(entity.id);
   const doneAtSource = Boolean(state && DONE_WORDS.test(state));
   const done = override ? override.done : doneAtSource;
 
@@ -115,16 +115,19 @@ function toWorkItem(entity: Entity): WorkItem {
 
 export async function getBoard(now = new Date()): Promise<Board> {
   const today = isoDay(now);
-  const entities = await getStorage().memory.listEntities({
-    type: WORK_TYPES,
-    // Below this a "task" is usually a ticket id someone typed in passing with
-    // nothing else known about it. Real, but not something to put on a board.
-    minConfidence: 0.6,
-  });
+  const [entities, overrides] = await Promise.all([
+    getStorage().memory.listEntities({
+      type: WORK_TYPES,
+      // Below this a "task" is usually a ticket id someone typed in passing with
+      // nothing else known about it. Real, but not something to put on a board.
+      minConfidence: 0.6,
+    }),
+    allOverrides(),
+  ]);
 
   const items = entities
     .filter(isTrackedWork)
-    .map(toWorkItem)
+    .map((entity) => toWorkItem(entity, overrides))
     .sort((a, b) => b.confidence - a.confidence || b.occurredAt.localeCompare(a.occurredAt));
 
   const open = items.filter((item) => !item.done);

@@ -11,7 +11,9 @@
       "PowerShell(npx tsc --noEmit -p tsconfig.json)",
       "PowerShell(if \\($?\\) { \"typecheck ok\" })",
       "Bash(git checkout *)",
-      "Bash(python -)"
+      "Bash(python -)",
+      "Bash(npm install *)",
+      "Bash(npm run *)"
     ]
   }
 }

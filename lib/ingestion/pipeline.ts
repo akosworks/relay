@@ -89,12 +89,12 @@ export async function syncIntegration(
   if (!connector) throw new Error(`Unknown integration: ${integrationId}`);
 
   const storage = getStorage();
-  const state = getIntegrationState(integrationId);
+  const state = await getIntegrationState(integrationId);
   const startedAt = new Date().toISOString();
   const extractor = getExtractor();
   const resolver = await hydrateResolver();
 
-  setIntegrationState(integrationId, { status: "syncing" });
+  await setIntegrationState(integrationId, { status: "syncing" });
 
   const fetched = await fetchFromSource(connector, {
     since: options.full ? undefined : (state?.lastSyncAt ?? undefined),
@@ -164,7 +164,7 @@ export async function syncIntegration(
   const memories = (await storage.memory.listEntities({ integrationId })).length;
 
   report.finishedAt = new Date().toISOString();
-  setIntegrationState(integrationId, {
+  await setIntegrationState(integrationId, {
     status: "connected",
     lastSyncAt: report.finishedAt,
     events: eventsForIntegration,
@@ -176,7 +176,7 @@ export async function syncIntegration(
 
 /** Connect a source: mark it connected, then learn everything it has. */
 export async function connectIntegration(integrationId: string): Promise<SyncReport> {
-  setIntegrationState(integrationId, {
+  await setIntegrationState(integrationId, {
     status: "syncing",
     connectedAt: new Date().toISOString(),
   });
@@ -188,7 +188,7 @@ export async function disconnectIntegration(integrationId: string): Promise<void
   const storage = getStorage();
   await storage.memory.clear(integrationId);
   await storage.raw.clear(integrationId);
-  setIntegrationState(integrationId, {
+  await setIntegrationState(integrationId, {
     status: "disconnected",
     connectedAt: null,
     lastSyncAt: null,
