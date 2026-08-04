@@ -136,6 +136,11 @@ async function callLlm(event: RawEvent): Promise<ExtractionResult | null> {
       model: config.model,
       temperature: config.temperature,
       response_format: { type: "json_object" },
+      // Same reasoning-model leak as the chat model: a <think> block ahead of
+      // the JSON breaks parseJsonPayload, so this call silently falls back to
+      // heuristic-only extraction — the model still reasons, this only keeps
+      // the leak out of content.
+      ...(config.provider === "groq" ? { reasoning_format: "hidden" } : {}),
       messages: [
         {
           role: "system",

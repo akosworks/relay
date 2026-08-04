@@ -83,6 +83,11 @@ export async function runChat(
         model: config.model,
         temperature: config.temperature,
         messages,
+        // A reasoning model (Qwen3, gpt-oss) otherwise inlines its <think> block
+        // straight into content: the reply becomes that reasoning dump instead
+        // of the answer, uncited, which reads as the model refusing to answer.
+        // The model still reasons — this only stops it leaking into the output.
+        ...(config.provider === "groq" ? { reasoning_format: "hidden" } : {}),
         ...(tools?.length ? { tools, tool_choice: "auto" } : {}),
       }),
     });
