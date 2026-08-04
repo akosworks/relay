@@ -1,6 +1,14 @@
 import type { Connector, ConnectorEvent } from "../types";
+import { fetchNotionEvents, getNotionConfig } from "./notion-api";
 
-/** Notion. Long-lived written knowledge: procedures, runbooks, decision records. */
+/**
+ * Notion. Long-lived written knowledge: procedures, runbooks, decision records.
+ *
+ * Set `NOTION_TOKEN` (an internal integration secret) and this reads pages
+ * shared with that integration, read-only; otherwise it falls back to the
+ * fixtures below. Same precedence as GitHub and Gmail: a configured account
+ * is read regardless of the mock-data switch.
+ */
 
 type NotionPage = {
   id: string;
@@ -48,7 +56,12 @@ export const notionConnector: Connector = {
   category: "documents",
   sourceTypes: ["notion.page"],
   teaches: ["procedure", "decision", "project", "document", "feature"],
-  async fetch({ since, limit } = {}) {
+  isLive: () => getNotionConfig() !== null,
+  async fetch(options = {}) {
+    const config = getNotionConfig();
+    if (config) return fetchNotionEvents(config, options);
+
+    const { since, limit } = options;
     const events: ConnectorEvent[] = PAGES.map((p): ConnectorEvent => ({
       sourceType: "notion.page",
       externalId: p.id,
